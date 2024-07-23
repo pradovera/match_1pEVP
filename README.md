@@ -17,7 +17,7 @@ Preprint publicly available [here](https://arxiv.org/abs/2308.05335)!
 ## Installing
 From the main folder, you can install the package by typing
 ```
-python setup.py install
+pip install .
 ```
 
 ## License

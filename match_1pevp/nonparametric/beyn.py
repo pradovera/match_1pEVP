@@ -1,10 +1,6 @@
 import numpy as np
-from numpy.linalg import eigvals, svd, solve
-from scipy.sparse.linalg import factorized
-
-def solveLS(A, b):
-    if isinstance(A, np.ndarray): return solve(A, b)
-    return factorized(A)(b)
+from numpy.linalg import eigvals, svd
+from match_1pevp.helpers.solve import solveLinearSystem as solveLS
 
 def beyn(L, center, radius, lhs, rhs, N_quad, rank_tol, hankel = 1):
     """    

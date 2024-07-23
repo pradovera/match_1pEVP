@@ -1,7 +1,7 @@
 from .helpers.match import match
-from .nonparametric import beyn
-from .parametric import train, evaluate
+from .train import train
+from .evaluate import evaluate
 
-__all__ = ['match', 'beyn', 'train', 'evaluate']
+__all__ = ['match', 'train', 'evaluate']
 
 

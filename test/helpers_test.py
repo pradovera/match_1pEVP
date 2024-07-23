@@ -50,7 +50,7 @@ def runTest(ps, coarsen, get_approx, get_exact):
             # sort v to follow trajectories (note: here val_ref.shape[1] == len(v_ref) so the match problem is square)
             if j > 0:
                 p_opt, _ = match(val_ref[j // coarsen - 1, :], v_ref)
-                v_ref = v_ref[p_opt[1]]
+                if len(v_ref): v_ref = v_ref[p_opt[1]]
             val_ref[j // coarsen, :] = v_ref
 
             if Nref == Napp:
