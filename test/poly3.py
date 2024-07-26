@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from match_1pevp import train, evaluate
-from match_1pevp.nonparametric import beyn
+from match_1pevp.nonparametric import beyn,loewner
 from helpers_test import runTest
 np.random.seed(42)
 
@@ -20,7 +20,11 @@ p_range = [-50., 50.]
 l_sketch = 5 # number of sketching directions in Beyn's method
 lhs = np.random.randn(l_sketch, 3) + 1j * np.random.randn(l_sketch, 3) # left sketching matrix
 rhs = np.random.randn(3, l_sketch) + 1j * np.random.randn(3, l_sketch) # right sketching matrix
-train_nonpar = lambda L, radius: beyn(L, 0., radius, lhs, rhs, 25, 1e-10, 1)
+# lint = 0 + 3*radius * np.exp(1j * np.linspace(1.4 * np.pi/2, 2.6 * np.pi/2, l_sketch)) # left interpolation points (uncomment to use loewner)
+# rint = 0 + 3*radius * np.exp(1j * np.linspace(-1.4 * np.pi/2, 0.6 * np.pi/2, l_sketch)) # right interpolation points (uncomment to use loewner)
+# train_nonpar = lambda L, radius: loewner(L, 0., radius, lhs, rhs, lint, rint, 30, 1e-10) # loewner method
+train_nonpar = lambda L, radius: beyn(L, 0., radius, lhs, rhs, 25, 1e-10, 1) # Beyn's method
+
 
 cutoff = lambda x: x[np.abs(x) <= radius]
 
