@@ -34,7 +34,7 @@ def loewner(L, center, radius, lhs, rhs, lint, rint, N_quad, rank_tol):
     So = cauchy * (np.diag(lint) @ H_eval_l @ rhs - lhs @ H_eval_r.T @ np.diag(rint))
 
     u, s, vh = svd(Lo)
-    r_eff = np.where(s > 1e-10 * s[0])[0][-1] + 1
+    r_eff = np.where(s > rank_tol * s[0])[0][-1] + 1
     u, s, vh = u[:, : r_eff], s[: r_eff], vh[: r_eff, :]
     B = np.diag(1/s) @ u.T.conj() @ So @ vh.T.conj() 
     vals = eigvals(B)
