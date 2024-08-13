@@ -33,7 +33,7 @@ def runTest(ps, coarsen, get_approx, get_exact):
         # sort v to follow trajectories (note: here val_app.shape[1] == len(v_app) so the match problem is square)
         if j > 0:
             p_opt, _ = match(val_app[j - 1, :], v_app)
-            v_app = v_app[p_opt[1]]
+            if len(v_app): v_app = v_app[p_opt[1]]
         val_app[j, :] = v_app
         
         # compute error
@@ -60,5 +60,5 @@ def runTest(ps, coarsen, get_approx, get_exact):
                 p_opt, d_opt = (p_opt[0][: Nref], p_opt[1][: Nref]), d_opt[: Nref] # remove extras
             else: #if Nref > Napp:
                 p_opt, d_opt = match(v_ref, np.pad(v_app, [(0, Nref - Napp)], constant_values = np.inf))
-            error[j // coarsen, p_opt[0]] = d_opt[p_opt[0], p_opt[1]]
+            if len(d_opt): error[j // coarsen, p_opt[0]] = d_opt[p_opt[0], p_opt[1]]
     return val_app, val_ref, error
