@@ -4,7 +4,7 @@ from match_1pevp import train, evaluate
 from match_1pevp.nonparametric import beyn, loewner
 from helpers_test import runTest
 
-def define_problem(method):
+def define_problem(method : str):
     radius = 4.
     A = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 0]])
     B = np.array([[0, 0, -2], [0, 0, -1], [0, 0, 0]])
@@ -33,7 +33,12 @@ def define_problem(method):
     return p_range, L, train_nonpar, [], cutoff, 0., bounds
 
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig()
+    logging.getLogger('match_1pevp').setLevel(logging.INFO)
+
     np.random.seed(42)
+
     method = "beyn"
     # method = "loewner" # uncomment to use loewner
     
@@ -45,8 +50,7 @@ if __name__ == "__main__":
     
     # train
     model, ps_train = train(L, train_nonpar, train_nonpar_args, cutoff, interp_kind,
-                            None, p_range, tol, min_patch_deltap = min_patch_deltap,
-                            verbose = 1)
+                            None, p_range, tol, min_patch_deltap = min_patch_deltap)
     
     # test
     ps = np.linspace(*p_range, 1500) # testing grid
@@ -77,7 +81,7 @@ if __name__ == "__main__":
     plt.plot(np.imag(val_ref[:, 0]), ps, 'ro')
     plt.plot(np.imag(val_app[:, 0]), ps, 'b:')
     plt.plot(np.imag(val_ref[:, 1:]), ps, 'ro')
-    plt.plot(np.imag(val_app), ps, 'b')
+    plt.plot(np.imag(val_app), ps, 'b:')
     plt.legend(['exact', 'approx'])
     plt.xlim(*bounds[1]), plt.ylim(*p_range)
     plt.xlabel("Im(lambda)"), plt.ylabel("p")

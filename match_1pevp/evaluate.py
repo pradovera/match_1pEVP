@@ -1,7 +1,10 @@
+from typing import Optional
+from collections.abc import Callable
 import numpy as np
 from .helpers.interp1d import interp1d_get_local_idx, interp1d_fast, interp1d_inf
 
-def evaluate(model, ps, p, interp_kind, patch_width, cutoff):
+def evaluate(model : tuple[np.ndarray[complex], Optional[list[list[list[int]]]]], ps : np.ndarray[float], p : float,
+             interp_kind : str, patch_width : int, cutoff : Callable[[np.ndarray[complex]], np.ndarray[complex]]) -> np.ndarray[complex]:
     """
     This function evaluates the approximated model for the given parametric eigenproblem.
 
@@ -17,7 +20,7 @@ def evaluate(model, ps, p, interp_kind, patch_width, cutoff):
     The evaluated values.
     """
     S = len(ps)
-    has_clusters = isinstance(model, tuple)
+    has_clusters = model[1] is not None
     j = interp1d_get_local_idx(p, ps, "previous")
     if j >= S - 1: j = S - 2
     j_patch_start, j_patch_end = 0, S
@@ -31,14 +34,14 @@ def evaluate(model, ps, p, interp_kind, patch_width, cutoff):
     ps_eff_wide = ps[j_patch_start_wide : j_patch_end_wide]
     interp = interp1d_fast(p, ps_eff, interp_kind) # Initialize the interpolation
     if has_clusters: # If the model has clusters, get the data and the cluster
-        data, cluster = model[0], model[1][j]
+        spectra, cluster = model[0], model[1][j]
     else: # If the model doesn't have clusters, get the data and create a cluster
-        data, cluster = model, [[j] for j in range(model.shape[1])]
-    values = np.empty(data.shape[1], dtype = complex)
+        spectra, cluster = model[0], [[j] for j in range(model[0].shape[1])]
+    values = np.empty(spectra.shape[1], dtype = complex)
 
     for c in cluster:
         # find effective stencil by excluding inf values
-        inf_near = np.any(np.isinf(data[j : j + 2, c]), axis = 1) # check inf left and right
+        inf_near = np.any(np.isinf(spectra[j : j + 2, c]), axis = 1) # check inf left and right
         if inf_near[0] and inf_near[1]: # inf both left and right
             values[c] = np.inf
             continue
@@ -58,20 +61,20 @@ def evaluate(model, ps, p, interp_kind, patch_width, cutoff):
                     c_indirect = True
                     c_, c = c, c_eff # store c for later use and overwrite with other cluster
             
-        inf_on_patch = np.any(np.isinf(data[j_patch_start : j_patch_end, c])) # check inf over whole patch
+        inf_on_patch = np.any(np.isinf(spectra[j_patch_start : j_patch_end, c])) # check inf over whole patch
         if len(c) == 1: # explicit form
             if inf_on_patch:
                 values_ = interp1d_inf(p, ps_eff_wide, # use wide patch
-                                       data[j_patch_start_wide : j_patch_end_wide, c[0]], interp_kind)
+                                       spectra[j_patch_start_wide : j_patch_end_wide, c[0]], interp_kind)
             else:
-                values_ = interp(data[j_patch_start : j_patch_end, c[0]])
+                values_ = interp(spectra[j_patch_start : j_patch_end, c[0]])
         else: # implicit form
             # get local implicit forms
             j_patch_start_ = j_patch_start_wide if inf_on_patch else j_patch_start
             j_patch_end_ = j_patch_end_wide if inf_on_patch else j_patch_end
             poly = np.empty((j_patch_end_ - j_patch_start_, len(c) + 1), dtype = complex)
             for k in range(j_patch_start_, j_patch_end_):
-                poly[k - j_patch_start_] = np.poly(data[k, c])
+                poly[k - j_patch_start_] = np.poly(spectra[k, c])
             # interpolate implicit forms
             if inf_on_patch:
                 poly_interpolated = interp1d_inf(p, ps_eff_wide, poly, interp_kind) # use wide patch
@@ -85,8 +88,8 @@ def evaluate(model, ps, p, interp_kind, patch_width, cutoff):
                 values_ = [np.inf] * len(c)
         if c_indirect: # values_ contains some extra unused values
             # look at support values on the finite side
-            support_data = data[j + 1, c_] if inf_near[0] else data[j, c_]
-            for k, val_ref in zip(c_, support_data):
+            support_spectra = spectra[j + 1, c_] if inf_near[0] else spectra[j, c_]
+            for k, val_ref in zip(c_, support_spectra):
                 idx = np.argmin(np.abs(values_ - val_ref)) # closest predicted value
                 values[k] = values_[idx]
         else:

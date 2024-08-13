@@ -5,9 +5,9 @@ from match_1pevp import train, evaluate
 from match_1pevp.nonparametric import beyn, loewner
 from helpers_test import runTest
 
-def define_problem(method):
+def define_problem(method : str):
     center, radius = -1., 1.
-    N, l, k, f0, f1, t1, t2 = 5000, np.pi, .02, -.1, .05, 1., 2. # scalar constants appearing in the problem
+    N, l, k, f0, f1, t1, t2 = 50, np.pi, .02, -.1, .05, 1., 2. # scalar constants appearing in the problem
     stiff = sparse.diags([-2 * np.ones(N - 1)] + [np.ones(N - 2)] * 2, [0, -1, 1], format = "csc") * (N / l) ** 2
     eye = sparse.eye(N - 1, format = "csc", dtype = complex) # identity
     # parametric matrix L(z,p) that defines the pEVP
@@ -35,7 +35,12 @@ def define_problem(method):
     return p_range, L, train_nonpar, [], cutoff, center, bounds
 
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig()
+    logging.getLogger('match_1pevp').setLevel(logging.INFO)
+
     np.random.seed(42)
+
     method = "beyn"
     # method = "loewner" # uncomment to use loewner
     
@@ -47,7 +52,7 @@ if __name__ == "__main__":
     
     # train
     model, ps_train = train(L, train_nonpar, train_nonpar_args, cutoff, interp_kind,
-                            patch_width, p_range, tol, verbose = 1)
+                            patch_width, p_range, tol)
     
     # test
     ps = np.linspace(*p_range, 500) # testing grid
@@ -72,7 +77,7 @@ if __name__ == "__main__":
     plt.plot(np.imag(val_ref[:, 0]), ps_coarse, 'ro')
     plt.plot(np.imag(val_app[:, 0]), ps, 'b:')
     plt.plot(np.imag(val_ref[:, 1:]), ps_coarse, 'ro')
-    plt.plot(np.imag(val_app), ps, 'b')
+    plt.plot(np.imag(val_app), ps, 'b:')
     plt.legend(['exact', 'approx'])
     plt.xlim(*bounds[1]), plt.ylim(*p_range)
     plt.xlabel("Im(lambda)"), plt.ylabel("p")

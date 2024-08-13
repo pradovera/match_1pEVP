@@ -1,9 +1,12 @@
+from typing import Optional, Union
+from collections.abc import Callable
 import numpy as np
 from .helpers.match import match
 from .helpers.cluster import findClusters, mergeClusters
 from .evaluate import evaluate
+from .helpers import logger as log
 
-def matchData(data, return_dist):
+def matchData(data : list[np.ndarray], return_dist : bool) -> Union[list[np.ndarray, list[np.ndarray]], np.ndarray]:
     """
     This function matches data, even if it's unbalanced. It matches the data with infinity where necessary to make it balanced.
 
@@ -30,7 +33,8 @@ def matchData(data, return_dist):
             if Nj < N: # If there are too few new values, add inf values
                 dataj = np.pad(dataj, [(0, N - Nj)], constant_values = np.inf)
             elif len(dataj) > N: # If there are too many new values, match with previous
-                data[j - 1] = np.pad(data[j - 1], [(0, Nj - N)], constant_values = np.inf)
+                data[j - 1] = np.pad(data[j - 1], [(0, Nj - N)],
+                                     constant_values = np.inf)
                 N = Nj
             # now the problem of matching data[j - 1] and dataj is balanced
             p_opt, d_opt = match(data[j - 1], dataj)
@@ -42,39 +46,116 @@ def matchData(data, return_dist):
         if Nj < N:
             data[j] = np.pad(data[j], [(0, N - Nj)], constant_values = np.inf)
             if j < len(data) - 1 and return_dist:
-                dists[j] = np.pad(dists[j], [(0, N - Nj)] * 2, constant_values = np.inf)
+                dists[j] = np.pad(dists[j], [(0, N - Nj)] * 2,
+                                  constant_values = np.inf)
     if return_dist: return np.array(data), dists
     return np.array(data)
 
-def clusterMatchedData(p, data, dists, d_thresh, min_patch_deltap):
+def postprocessModel(ps : np.ndarray[float], data : list[np.ndarray],
+                     d_thresh : Optional[float], min_patch_deltap : float
+                     ) -> tuple[np.ndarray, Optional[list[list[list[int]]]]]:
     """
-    This function clusters matched data points based on their distances. It then merges nearby clusters.
+    This function reorders and matches the computed spectrum, clustering and merging matched data points based on their distances.
 
     Parameters:
-    p (numpy array): The array of data points.
-    data (list of numpy arrays): The matched data. Each element of the list is a numpy array of data points.
-    dists (list of numpy arrays): The distances between matched points. Each element of the list is a numpy array of distances.
+    ps (numpy array): The array of sample points.
+    data (list of numpy arrays): List of computed spectra to be matched.
     d_thresh (float): The distance threshold for clustering. Points closer than this distance are considered part of the same cluster.
     min_patch_deltap (float): The minimum distance between clusters for them to be considered separate.
 
     Returns:
-    list of numpy arrays: The merged clusters. Each element of the list is a numpy array of data points in a cluster.
+    data: Sorted data
+    clusters: Computed clusters, if required
     """
-    clusters = []
-    for d in dists:
-        d_inf = np.isinf(np.diag(d))
-        d[d_inf, d_inf] = 0.
-        clusters += [findClusters(d, d_thresh)]
-    # find effective clusters on each patch by merging nearby clusters
-    try:
-        deltaps = p[1:] - p[:-1]
-    except TypeError:
-        deltaps = np.array([p[j + 1] - p[j] for j in range(len(p) - 1)])
-    return mergeClusters(clusters, deltaps, min_patch_deltap)
+    if d_thresh is None:
+        data = matchData(data)
+        clusters = None
+    else:
+        data, dists = matchData(data, True)
+        clusters = []
+        for d in dists:
+            d_inf = np.isinf(np.diag(d))
+            d[d_inf, d_inf] = 0.
+            clusters += [findClusters(d, d_thresh)]
+        # find effective clusters on each patch by merging nearby clusters
+        deltaps = ps[1:] - ps[:-1]
+        clusters = mergeClusters(clusters, deltaps, min_patch_deltap)
+    return data, clusters
 
-def train(L, solve_nonpar, solve_nonpar_args, cutoff, interp_kind, patch_width,
-          ps_start, tol, max_iter=100, d_thresh=1e-1, min_patch_deltap=1e-2,
-          verbose=False):
+def computeMatchError(p : float, v_ref : np.ndarray, v_pre : np.ndarray) -> float:
+    """
+    This function computes the spectrum approximation error by a match step.
+
+    Parameters:
+    p (float): Current sample point.
+    v_ref (numpy array): Exact spectrum.
+    v_pre (numpy array): Approximate spectrum.
+
+    Returns:
+    d_tot: Approximation error
+    """
+    Nref, Npre = len(v_ref), len(v_pre)
+    log.debug("Comparison at p={} between exact={} and approx={}".format(p, v_ref,
+                                                                         v_pre))
+    if Nref == 0 and Npre == 0:
+        log.info("\t no eigenvalues at {}".format(p))
+        return 0
+    if Nref < Npre:
+        v_ref = np.pad(v_ref, [(0, Npre - Nref)], constant_values = np.inf)
+    elif Nref > Npre:
+        v_pre = np.pad(v_pre, [(0, Nref - Npre)], constant_values = np.inf)
+    p_opt, d_opt = match(v_ref, v_pre)
+    d_opt_diag = d_opt[p_opt[0], p_opt[1]]
+    log.debug("Reordered spectra are exact={} and approx={}, with errors={}".format(
+                                     v_ref[p_opt[0]], v_pre[p_opt[1]], d_opt_diag))
+    d_opt_diag = d_opt_diag[np.logical_not(np.isinf(d_opt_diag))]
+    d_tot = np.max(d_opt_diag) if len(d_opt_diag) else 0.
+    log.info("\t error at {} = {}".format(p, d_tot))
+    return d_tot
+
+def refineGrid(ps : np.ndarray[float], data : list[np.ndarray], ps_next_bad : list[float],
+               pre_next_bad : list[int], dps_next_bad : list[float], data_bad : list[np.ndarray]
+               ) -> tuple[np.ndarray[float], list[float], list[int], list[float], np.ndarray]:
+    """
+    Perform operation to refine grid based.
+
+    Parameters:
+    ps (numpy array): The array of sample points.
+    data (list of numpy arrays): List of computed spectra.
+    ps_next_bad (list of floats): List of sample points to be appended.
+    pre_next_bad (list of ints): List of location indices for future refinements.
+    dps_next_bad (list of floats): List of mesh-sizes for future refinements.
+    data_bad (list of numpy arrays): List of spectra to be appended.
+
+    Returns:
+    ps: Array of sample points
+    ps_next: Array of test points to be explored
+    pre_next: List of location indices for future refinements
+    dps_next: List of mesh-sizes for future refinements
+    data: Updated list of computed spectra.
+    """
+    ps_next, pre_next, dps_next = [], [], []
+    ps, data = list(ps), list(data)
+    for i, (p, pre, step, datum) in enumerate(zip(ps_next_bad, pre_next_bad,
+                                                  dps_next_bad, data_bad)):
+        for ishift, shift in enumerate([- step, step]):
+            p_new = p + shift
+            if len(ps_next) == 0 or abs(p_new - ps_next[-1]) > 1e-10: # no duplicate entries
+                ps_next += [p_new]
+                pre_next += [pre + i + ishift]
+                dps_next += [.5 * step]
+        idx_add = pre + i + 1
+        ps = ps[: idx_add] + [p] + ps[idx_add :]
+        data = data[: idx_add] + [datum] + data[idx_add :]
+    return np.array(ps), ps_next, pre_next, dps_next, data
+
+def train(L : Callable[[complex, float], np.ndarray],
+          solve_nonpar : Callable[[Callable[[complex], np.ndarray], ...], np.ndarray], # type: ignore
+          solve_nonpar_args : list[...], # type: ignore
+          cutoff : Callable[[np.ndarray[complex]], np.ndarray[complex]], interp_kind : str,
+          patch_width : int, ps_start : Union[np.ndarray[float], list[float]], tol : float,
+          max_iter : int = 100, d_thresh : Optional[float] = 1e-1, min_patch_deltap : float = 1e-2
+          ) -> tuple[tuple[np.ndarray[complex], Optional[list[list[list[int]]]]], np.ndarray[float]]:
     """
     This function trains the approximation model with the data taken from the parametric eigenproblem.
     
@@ -93,7 +174,7 @@ def train(L, solve_nonpar, solve_nonpar_args, cutoff, interp_kind, patch_width,
     verbose: whether to track progress in console
     
     Returns:
-    model_out: The trained model
+    model_out: The trained model (tuple with eigenvalues and clusters)
     ps: The final grid of sample p-points
     """
     
@@ -106,77 +187,43 @@ def train(L, solve_nonpar, solve_nonpar_args, cutoff, interp_kind, patch_width,
     pre_next = list(range(len(ps_next)))
     dps_next = [.25 * dps[0]] * len(ps_next)
     
-    if verbose: print("Initial sampling at {} point(s)".format(len(ps)))
-    data = []
+    log.info("Initial sampling at {} point(s)".format(len(ps)))
+    spectra_list = []
     for p in ps:
-        if verbose: print(".", end = "", flush = True)
         Lp = lambda z: L(z, p)
-        data += [solve_nonpar(Lp, *solve_nonpar_args)]
-    if verbose: print()
+        spectra_list += [solve_nonpar(Lp, *solve_nonpar_args)]
+        log.debug("Spectrum at p={} is {}".format(p, spectra_list[-1]))
     # train model
-    model_out = matchData(data, d_thresh is not None)
-    data = list(model_out[0])
-    if d_thresh is not None:
-        clusters = clusterMatchedData(ps, *model_out, d_thresh,
-                                      min_patch_deltap)
-        model_out = (model_out[0], clusters)
+    model_out = postprocessModel(ps, spectra_list, d_thresh, min_patch_deltap)
     if np.isinf(tol): return model_out, ps
     
     # Adaptive refinement
     for _ in range(int(max_iter)):
         # test model
-        if verbose: print("Adaptive match iteration: test at {} point(s)".format(len(ps_next)))
+        log.info("Adaptive match iteration: test at {} point(s)".format(len(ps_next)))
         val_pre, val_ref = [], []
         for p in ps_next:
-            if verbose: print(".", end = "", flush = True)
             val_pre += [evaluate(model_out, ps, p, interp_kind,
                                  patch_width, cutoff)]
             Lp = lambda z: L(z, p)
             val_ref += [solve_nonpar(Lp, *solve_nonpar_args)]
-        if verbose: print()
-        to_be_refined = []
-        for j in range(len(ps_next)):
-            # get prediction error
-            Nref, Npre = len(val_ref[j]), len(val_pre[j])
-            if Nref == 0 and Npre == 0:
-                if verbose: print("\t no eigenvalues at {}".format(ps_next[j]))
-            else:
-                v_ref, v_pre = val_ref[j], val_pre[j]
-                if Nref < Npre:
-                    v_ref = np.pad(v_ref, [(0, Npre - Nref)], constant_values = np.inf)
-                elif Nref > Npre:
-                    v_pre = np.pad(v_pre, [(0, Nref - Npre)], constant_values = np.inf)
-                p_opt, d_opt = match(v_ref, v_pre)
-                d_opt_diag = d_opt[p_opt[0], p_opt[1]]
-                d_opt_diag = d_opt_diag[np.logical_not(np.isinf(d_opt_diag))]
-                d_tot = np.max(d_opt_diag) if len(d_opt_diag) else 0.
-                if verbose: print("\t error at {} = {}".format(ps_next[j], d_tot))
-            if d_tot > tol: to_be_refined += [j]
+            log.debug("Spectrum at p={} is {}".format(p, val_ref[-1]))
+        # get prediction error
+        ps_next_bad, pre_next_bad, dps_next_bad, spectra_bad = [], [], [], []
+        for j, (p, v_ref, v_pre) in enumerate(zip(ps_next, val_ref, val_pre)):
+            d_tot = computeMatchError(p, v_ref, v_pre)
+            if d_tot > tol:
+                ps_next_bad += [p]
+                pre_next_bad += [pre_next[j]]
+                dps_next_bad += [dps_next[j]]
+                spectra_bad += [v_ref]
         # refine model
-        ps_next_new, pre_next_new, dps_next_new = [], [], []
-        if len(to_be_refined) == 0: break
-        ps_new = list(ps)
-        for n_added, j in enumerate(to_be_refined):
-            ctr, pre, step = ps_next[j], pre_next[j], dps_next[j]
-            for ishift, shift in enumerate([- step, step]):
-                ctrn = ctr + shift
-                if len(ps_next_new) == 0 or abs(ctrn - ps_next_new[-1]) > 1e-10: # no duplicate entries
-                    ps_next_new += [ctrn]
-                    pre_next_new += [pre + n_added + ishift]
-                    dps_next_new += [.5 * step]
-            idx_add = pre + n_added + 1
-            ps_new = ps_new[: idx_add] + [ctr] + ps_new[idx_add :]
-            data = data[: idx_add] + [val_ref[j]] + data[idx_add :]
-        ps, ps_next = np.array(ps_new), ps_next_new
-        pre_next, dps_next = pre_next_new, dps_next_new
+        if len(ps_next_bad) == 0: break
+        ps, ps_next, pre_next, dps_next, spectra_list = refineGrid(ps, model_out[0],
+                                                          ps_next_bad, pre_next_bad,
+                                                          dps_next_bad, spectra_bad)
         # train model
-        model_out = matchData(data, d_thresh is not None)
-        data = list(model_out[0])
-        if d_thresh is not None:
-            clusters = clusterMatchedData(ps, *model_out, d_thresh,
-                                          min_patch_deltap)
-            model_out = (model_out[0], clusters)
+        model_out = postprocessModel(ps, spectra_list, d_thresh, min_patch_deltap)
     else:
-        if verbose: print("Max number of refinement iterations reached!")
+        log.warning("Max number of refinement iterations reached!")
     return model_out, ps
-
