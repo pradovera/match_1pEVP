@@ -1,7 +1,8 @@
+from typing import Optional
 import numpy as np
 from .match import matchBase
 
-def findLargestFullDiagSubmatrix(A):
+def findLargestFullDiagSubmatrix(A : np.ndarray[bool]) -> np.ndarray[int]:
     # merge all bifurcation flags in a smart way
     idx = np.arange(len(A))
     zeros = np.where(np.logical_not(A))
@@ -18,7 +19,7 @@ def findLargestFullDiagSubmatrix(A):
         if len(idx_R) > len(idx_L): return idx_R
     return idx_L
 
-def findClusters(d, thresh, kind = "largest", inf = 1e10):
+def findClusters(d : np.ndarray, thresh : Optional[float], kind : str = "largest", inf : float = 1e10) -> list[list[int]]:
     """
     This function finds clusters in a given distance matrix by comparing best match with all possible 2nd-best matches.
 
@@ -68,7 +69,7 @@ def findClusters(d, thresh, kind = "largest", inf = 1e10):
         for k in best_cluster[::-1]: unused.pop(k) # flag items as used
     return clusters
 
-def mergeClusters(cluster_list, deltap_list, min_patch_deltap):
+def mergeClusters(cluster_list : list[list[list[int]]], deltap_list : list[float], min_patch_deltap : float) -> list[list[list[int]]]:
     """
     This function merges clusters based on minimal cluster width.
 

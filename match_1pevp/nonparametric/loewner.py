@@ -1,8 +1,10 @@
+from collections.abc import Callable
 import numpy as np
 from numpy.linalg import eigvals, svd
 from match_1pevp.helpers.solve import solveLinearSystem as solveLS
 
-def loewner(L, center, radius, lhs, rhs, lint, rint, N_quad, rank_tol):
+def loewner(L : Callable[[complex], np.ndarray], center : float, radius : float, lhs : np.ndarray, rhs : np.ndarray,
+            lint : np.ndarray[complex], rint : np.ndarray[complex], N_quad : int, rank_tol : float) -> np.ndarray[complex]:
     '''
     Parameters:
         L: lambda function defining matrix in eigenproblem

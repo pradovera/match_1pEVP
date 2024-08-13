@@ -1,8 +1,10 @@
+from collections.abc import Callable
 import numpy as np
 from numpy.linalg import eigvals, svd
 from match_1pevp.helpers.solve import solveLinearSystem as solveLS
 
-def beyn(L, center, radius, lhs, rhs, N_quad, rank_tol, hankel = 1):
+def beyn(L : Callable[[complex], np.ndarray], center : float, radius : float, lhs : np.ndarray,
+         rhs : np.ndarray, N_quad : int, rank_tol : float, hankel : int = 1) -> np.ndarray[complex]:
     """    
     This function computes approximate eigenvalues of non-parametric eigenproblems through Beyn's contour integral method
     

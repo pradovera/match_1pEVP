@@ -1,7 +1,9 @@
-from numpy import abs, eye, argmin, argpartition, isinf, any, logical_or, isnan
+from typing import Union
+from collections.abc import Callable
+from numpy import abs, eye, argmin, argpartition, isinf, any, logical_or, isnan, ndarray
 from scipy.interpolate import interp1d, make_interp_spline
 
-def interp1d_get_local_idx(p, ps, interp_kind):
+def interp1d_get_local_idx(p : float, ps : ndarray[float], interp_kind : str) -> int:
     """
     This function computes the index for local-ish interpolation.
     
@@ -32,7 +34,7 @@ def interp1d_get_local_idx(p, ps, interp_kind):
     if interp_kind == "previous": return j - 1
     return j + 1
 
-def interp1d_fast(p, ps, interp_kind):
+def interp1d_fast(p : float, ps : ndarray[float], interp_kind : str) -> Callable[[Union[float, ndarray]], Union[float, ndarray]]:
     """
     This function computes the interpolation weights at p, given support points ps. Returns the interpolant function.
     
@@ -76,7 +78,7 @@ def interp1d_fast(p, ps, interp_kind):
         raise Exception("Value of interp_kind not recognized")
     return lambda x: sum([w * x_ for w, x_ in zip(weights, x)])
 
-def interp1d_inf(p, ps, values, interp_kind):
+def interp1d_inf(p : float, ps : ndarray[float], values : ndarray, interp_kind : str) -> Union[float, ndarray]:
     """
     Computes interpolation weights at p as interp1d_fast(), but allows also infinite values.
 

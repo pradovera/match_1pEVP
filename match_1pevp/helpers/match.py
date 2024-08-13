@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-def matchBase(dist):
+def matchBase(dist : np.ndarray) -> tuple[tuple[np.ndarray[int], np.ndarray[int]], np.ndarray]:
     """
     This function performs a matching operation based on a distance matrix.
 
@@ -38,7 +38,7 @@ def matchBase(dist):
         match_1[: len(match_0)] = match_1[idx_0]
     return (match_0, match_1), dist
 
-def match(values_0, values_1):
+def match(values_0 : np.ndarray, values_1 : np.ndarray) -> tuple[tuple[np.ndarray[int], np.ndarray[int]], np.ndarray]:
     """
     This function matches two sets of values based on their distances.
 
