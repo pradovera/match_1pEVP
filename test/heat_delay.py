@@ -7,7 +7,7 @@ from helpers_test import runTest
 
 def define_problem(method : str):
     center, radius = -1., 1.
-    N, l, k, f0, f1, t1, t2 = 50, np.pi, .02, -.1, .05, 1., 2. # scalar constants appearing in the problem
+    N, l, k, f0, f1, t1, t2 = 5000, np.pi, .02, -.1, .05, 1., 2. # scalar constants appearing in the problem
     stiff = sparse.diags([-2 * np.ones(N - 1)] + [np.ones(N - 2)] * 2, [0, -1, 1], format = "csc") * (N / l) ** 2
     eye = sparse.eye(N - 1, format = "csc", dtype = complex) # identity
     # parametric matrix L(z,p) that defines the pEVP

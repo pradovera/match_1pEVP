@@ -56,4 +56,5 @@ def match(values_0 : np.ndarray, values_1 : np.ndarray) -> tuple[tuple[np.ndarra
     notinf_0 = np.logical_not(np.isinf(values_0))
     dist[notinf_0] = np.abs(np.reshape(values_0[notinf_0], (-1, 1))
                           - np.reshape(values_1, (1, -1)))
+    dist[:, np.isinf(values_1)] = np.inf
     return matchBase(dist)
