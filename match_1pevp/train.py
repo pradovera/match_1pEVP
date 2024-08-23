@@ -139,11 +139,9 @@ def refineGrid(ps : np.ndarray[float], data : list[np.ndarray], ps_next_bad : li
     for i, (p, pre, step, datum) in enumerate(zip(ps_next_bad, pre_next_bad,
                                                   dps_next_bad, data_bad)):
         for ishift, shift in enumerate([- step, step]):
-            p_new = p + shift
-            if len(ps_next) == 0 or abs(p_new - ps_next[-1]) > 1e-10: # no duplicate entries
-                ps_next += [p_new]
-                pre_next += [pre + i + ishift]
-                dps_next += [.5 * step]
+            ps_next += [p + shift]
+            pre_next += [pre + i + ishift]
+            dps_next += [.5 * step]
         idx_add = pre + i + 1
         ps = ps[: idx_add] + [p] + ps[idx_add :]
         data = data[: idx_add] + [datum] + data[idx_add :]
